@@ -51,7 +51,16 @@ class BaseModelLoader:
         if dtype:
             import torch
 
-            model_kwargs["torch_dtype"] = getattr(torch, dtype)
+            allowed_dtypes = {
+                "float16": torch.float16,
+                "bfloat16": torch.bfloat16,
+                "float32": torch.float32,
+            }
+            if dtype not in allowed_dtypes:
+                raise ValueError(
+                    f"Unsupported dtype '{dtype}'. Supported dtypes are: {', '.join(sorted(allowed_dtypes.keys()))}."
+                )
+            model_kwargs["torch_dtype"] = allowed_dtypes[dtype]
 
         model = AutoModelForCausalLM.from_pretrained(model_path, **model_kwargs)
         tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, trust_remote_code=trust_remote_code)

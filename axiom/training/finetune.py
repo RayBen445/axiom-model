@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import List
 
-from axiom.training.datasets import iter_training_text, load_jsonl
+from axiom.training.datasets import TextDataset, iter_training_text, load_jsonl
 
 
 @dataclass
@@ -17,26 +17,15 @@ class FineTuneConfig:
     learning_rate: float = 2e-5
 
 
-class TextDataset:
-    def __init__(self, tokenized: dict) -> None:
-        self.tokenized = tokenized
-
-    def __len__(self) -> int:
-        return self.tokenized["input_ids"].shape[0]
-
-    def __getitem__(self, idx: int) -> dict:
-        return {
-            "input_ids": self.tokenized["input_ids"][idx],
-            "attention_mask": self.tokenized["attention_mask"][idx],
-            "labels": self.tokenized["input_ids"][idx],
-        }
-
-
 def run_full_finetune(config: FineTuneConfig) -> None:
     from transformers import AutoModelForCausalLM, AutoTokenizer, Trainer, TrainingArguments
 
     tokenizer = AutoTokenizer.from_pretrained(config.model_path)
     model = AutoModelForCausalLM.from_pretrained(config.model_path)
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
+    if model.config.pad_token_id is None:
+        model.config.pad_token_id = tokenizer.pad_token_id
 
     examples = load_jsonl(config.dataset_path)
     training_text: List[str] = list(iter_training_text(examples))

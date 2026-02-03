@@ -1,32 +1,37 @@
 # AXIOM Training Guide
 
 ## Overview
-AXIOM supports two training modes:
-- **Full Fine-Tune:** Updates all weights on the base model.
-- **LoRA Fine-Tune:** Adds low-rank adapters while keeping the base model intact.
+AXIOM v0.2.0 uses parameter-efficient fine-tuning with LoRA (Low-Rank Adaptation). LoRA adds small, trainable adapter matrices to a frozen base model, which reduces compute cost while preserving the base weights.
 
 ## Data Preparation
-Training data must be JSONL with `prompt` and `response` fields. Identity alignment data should be included in every training run.
+Training data lives in `data/` and uses JSONL with `instruction` and `response` fields:
+- `axiom_identity_v1.jsonl` (highest weight)
+- `axiom_instruction_v1.jsonl` (primary)
+- `axiom_refusal_v1.jsonl` (medium weight)
 
-## Full Fine-Tune
-Run:
+The LoRA pipeline merges these datasets with weighted sampling to preserve identity alignment during training.
+
+## LoRA Fine-Tuning (AXIOM v0.2.0)
+Configure hyperparameters in `axiom/training/config_lora.yaml`, then run:
 ```
-python -m axiom.training.finetune --help
+python scripts/axiom_train.py \
+  --base-model gpt2 \
+  --dataset-dir data \
+  --output-dir models/axiom-v0.2.0 \
+  --device cpu
 ```
 
-## LoRA Fine-Tune
-Run:
+This creates LoRA adapter weights in the output directory. It does not modify the base model.
+
+## Identity Consistency Evaluation
+After training, evaluate identity alignment using the existing identity evaluation suite:
 ```
-python scripts/axiom_train.py --mode lora --model-path /path/to/base --dataset data/axiom-identity-v1.jsonl --output output/lora
+python scripts/axiom_eval.py --suite identity
 ```
 
-## Full Fine-Tune (All Weights)
-Run:
-```
-python scripts/axiom_train.py --mode full --model-path /path/to/base --dataset data/axiom-identity-v1.jsonl --output output/full
-```
+Review outputs for correct AXIOM identification and ownership attribution to Cool Shot Systems.
 
 ## Best Practices
-- Keep identity and safety datasets up to date.
-- Run evaluation suites after each training run.
-- Store artifacts with versioned tags for auditability.
+- Keep identity and refusal datasets included in every run to prevent drift.
+- Track the dataset versions used for each training artifact.
+- Validate identity compliance after each training cycle.
