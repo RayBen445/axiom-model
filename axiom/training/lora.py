@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import List
 
-from axiom.training.datasets import iter_training_text, load_jsonl
+from axiom.training.datasets import TextDataset, iter_training_text, load_jsonl
 
 
 @dataclass
@@ -26,6 +26,10 @@ def run_lora_finetune(config: LoRAConfig) -> None:
 
     tokenizer = AutoTokenizer.from_pretrained(config.model_path)
     model = AutoModelForCausalLM.from_pretrained(config.model_path)
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
+    if model.config.pad_token_id is None:
+        model.config.pad_token_id = tokenizer.pad_token_id
 
     lora_config = LoraConfig(
         r=config.r,
@@ -40,17 +44,6 @@ def run_lora_finetune(config: LoRAConfig) -> None:
     training_text: List[str] = list(iter_training_text(examples))
     tokenized = tokenizer(training_text, return_tensors="pt", padding=True, truncation=True)
 
-    class TextDataset:
-        def __len__(self) -> int:
-            return tokenized["input_ids"].shape[0]
-
-        def __getitem__(self, idx: int) -> dict:
-            return {
-                "input_ids": tokenized["input_ids"][idx],
-                "attention_mask": tokenized["attention_mask"][idx],
-                "labels": tokenized["input_ids"][idx],
-            }
-
     training_args = TrainingArguments(
         output_dir=str(config.output_path),
         num_train_epochs=config.epochs,
@@ -60,6 +53,6 @@ def run_lora_finetune(config: LoRAConfig) -> None:
         save_steps=50,
     )
 
-    trainer = Trainer(model=model, args=training_args, train_dataset=TextDataset())
+    trainer = Trainer(model=model, args=training_args, train_dataset=TextDataset(tokenized))
     trainer.train()
     model.save_pretrained(str(config.output_path))
