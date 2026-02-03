@@ -1,7 +1,6 @@
 """Logging utilities for AXIOM."""
 
 import logging
-from typing import Optional
 
 
 def get_logger(name: str, level: int = logging.INFO) -> logging.Logger:

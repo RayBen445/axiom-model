@@ -5,7 +5,8 @@ from typing import Optional
 
 
 def build_system_prompt(identity_statement: str, extra_guidance: Optional[str] = None) -> str:
-    base_prompt = Path("axiom/prompts/system.txt").read_text(encoding="utf-8")
+    prompt_path = Path(__file__).resolve().parent / "system.txt"
+    base_prompt = prompt_path.read_text(encoding="utf-8")
     if identity_statement not in base_prompt:
         base_prompt = f"{identity_statement}\n\n{base_prompt}"
     if extra_guidance:
