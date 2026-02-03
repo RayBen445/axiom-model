@@ -39,8 +39,19 @@ class AxiomInference:
                 "reason": "blocked_topic",
             }
 
-        combined_prompt = f"{system_prompt}\n\nUser: {prompt}\nAXIOM:"
+        assistant_tag = self.identity_validator.model_name.strip() or "AXIOM"
+        combined_prompt = f"{system_prompt}\n\nUser: {prompt}\n{assistant_tag}:"
         encoded = self.tokenizer.encode(combined_prompt)
+        model_device = getattr(self.model, "device", None)
+        if model_device is not None:
+            encoded = encoded.__class__(
+                input_ids=encoded.input_ids.to(model_device),
+                attention_mask=(
+                    encoded.attention_mask.to(model_device)
+                    if encoded.attention_mask is not None
+                    else None
+                ),
+            )
         output = self.model.generate(
             input_ids=encoded.input_ids,
             attention_mask=encoded.attention_mask,
@@ -49,8 +60,9 @@ class AxiomInference:
             top_p=self.generation_config.top_p,
             repetition_penalty=self.generation_config.repetition_penalty,
         )
-        decoded = self.tokenizer.decode(output[0])
-        response = decoded.split("AXIOM:")[-1].strip()
+        input_length = encoded.input_ids.shape[-1]
+        generated_tokens = output[0][input_length:]
+        response = self.tokenizer.decode(generated_tokens).strip()
 
         if not self.identity_validator.is_identity_compliant(response):
             response = self.identity_validator.identity_statement
