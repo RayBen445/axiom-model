@@ -62,8 +62,23 @@ class BaseModelLoader:
                 )
             model_kwargs["torch_dtype"] = allowed_dtypes[dtype]
 
-        model = AutoModelForCausalLM.from_pretrained(model_path, **model_kwargs)
-        tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, trust_remote_code=trust_remote_code)
+        # Check if model_path is a LoRA adapter directory
+        adapter_config_path = Path(model_path) / "adapter_config.json"
+        is_lora_adapter = adapter_config_path.exists()
+
+        if is_lora_adapter:
+            # Load base model (gpt2) and wrap with PeftModel
+            from peft import PeftModel
+
+            base_model = AutoModelForCausalLM.from_pretrained("gpt2", **model_kwargs)
+            model = PeftModel.from_pretrained(base_model, model_path)
+            # Always load tokenizer from base model (gpt2) for LoRA adapters
+            tokenizer = AutoTokenizer.from_pretrained("gpt2", trust_remote_code=trust_remote_code)
+        else:
+            # Load model normally from model_path
+            model = AutoModelForCausalLM.from_pretrained(model_path, **model_kwargs)
+            tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, trust_remote_code=trust_remote_code)
+
         model.to(device)
         model.eval()
         return model, tokenizer

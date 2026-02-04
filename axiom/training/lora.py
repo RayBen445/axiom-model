@@ -24,13 +24,33 @@ def run_lora_finetune(config: LoRAConfig) -> None:
     from transformers import AutoModelForCausalLM, AutoTokenizer, Trainer, TrainingArguments
     from peft import LoraConfig, get_peft_model
 
-    tokenizer = AutoTokenizer.from_pretrained(config.model_path)
-    model = AutoModelForCausalLM.from_pretrained(config.model_path)
-    if tokenizer.pad_token is None:
-        tokenizer.pad_token = tokenizer.eos_token
+    # LOAD TOKENIZER (LOCAL ONLY)
+    tokenizer = AutoTokenizer.from_pretrained(
+        config.model_path,
+        local_files_only=True
+    )
+
+    # FIX GPT-2 PADDING
+  if tokenizer.pad_token is None:
+    tokenizer.add_special_tokens({"pad_token": "[PAD]"})
+
+
+    # LOAD MODEL (LOCAL ONLY)
+    model = AutoModelForCausalLM.from_pretrained(
+        config.model_path,
+        local_files_only=True
+    )
+
+     model.resize_token_embeddings(len(tokenizer))
+model.config.pad_token_id = tokenizer.pad_token_id
+
+
+
     if model.config.pad_token_id is None:
         model.config.pad_token_id = tokenizer.pad_token_id
 
+
+    # LoRA CONFIG
     lora_config = LoraConfig(
         r=config.r,
         lora_alpha=config.alpha,
@@ -38,11 +58,21 @@ def run_lora_finetune(config: LoRAConfig) -> None:
         bias="none",
         task_type="CAUSAL_LM",
     )
+
     model = get_peft_model(model, lora_config)
 
+    # LOAD DATA
     examples = load_jsonl(config.dataset_path)
     training_text: List[str] = list(iter_training_text(examples))
-    tokenized = tokenizer(training_text, return_tensors="pt", padding=True, truncation=True)
+
+  tokenized = tokenizer(
+    training_text,
+    return_tensors="pt",
+    padding="max_length",
+    truncation=True,
+    max_length=512
+)
+
 
     training_args = TrainingArguments(
         output_dir=str(config.output_path),
@@ -53,6 +83,11 @@ def run_lora_finetune(config: LoRAConfig) -> None:
         save_steps=50,
     )
 
-    trainer = Trainer(model=model, args=training_args, train_dataset=TextDataset(tokenized))
+    trainer = Trainer(
+        model=model,
+        args=training_args,
+        train_dataset=TextDataset(tokenized),
+    )
+
     trainer.train()
     model.save_pretrained(str(config.output_path))
